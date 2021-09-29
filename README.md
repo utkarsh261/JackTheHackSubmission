@@ -10,10 +10,10 @@
 ##### Project will open on port 3000
 
 **To start the Vehicle Route Optimization app**
-1. Simply open index.html in a browser.
+1. Simply open `VehicleRoutingWebApp.html` in a browser.
 
 **To Start Vehicle Optimization API**
-1. `cd VehicleOptimizationAPI` 
+1. ```cd VehicleOptimizationAPI``` 
 2. Create a [virtual-env](https://docs.python.org/3/tutorial/venv.html)
 3. Install requirements:
     ```
