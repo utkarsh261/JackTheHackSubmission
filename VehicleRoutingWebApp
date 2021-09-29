@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Getting started with the Mapbox Directions API</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v2.4.1/mapbox-gl.js"></script>
+    <link
+      href="https://api.tiles.mapbox.com/mapbox-gl-js/v2.4.1/mapbox-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+      }
+      #instructions {
+        position: absolute;
+        margin: 20px;
+        width: 20%;
+        height: 25%;
+        top: 0;
+        bottom: 20%;
+        opacity: 40%;
+        padding: 20px;
+        /* overflow-y: scroll; */
+        color: #fff;
+        background-color: #000;
+        font-family: sans-serif;
+      }
+      #cross {
+        position: absolute;
+        margin: 30px;
+        color: #fff;
+      }
+      .display{
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="instructions"></div>
+    <div id="cross">X</div>
+    <script>
+      mapboxgl.accessToken =
+        "pk.eyJ1IjoieGF0aXNoYXl4IiwiYSI6ImNrdHR5OTl0aDA1YnEyb3A4MDQwNnY1MGQifQ.IhGx_ZkJaKRpzrhZu62iXg";
+      
+      function reCenter(response, map) {
+        map.flyTo({
+          center: response.routes_coords[0][0].split(','),
+          essential: true
+        });
+      }
+
+      // Initialise user provided locations with a circle and call getRoute() to draw lines between routes
+      // One color for each vehicle
+      function init_locations(map, response, getRoute) {
+        var colors = ["yellow", "red", "cyan", "#FF00CC", "#1B1B1B"];
+        var ci=0;
+        for (var i = 0; i < response.routes_coords.length; i++) {
+          var col = colors[(i%colors.length)];
+          for (var j = 0; j < response.routes_coords[i].length - 1; j++) {
+            var start = response.routes_coords[i][j].split(",");
+            // Add starting point to the map
+            map.addLayer({
+              id: (Math.random() + 1).toString(36).substring(7),
+              type: "circle",
+              source: {
+                type: "geojson",
+                data: {
+                  type: "FeatureCollection",
+                  features: [
+                    {
+                      type: "Feature",
+                      properties: {},
+                      geometry: {
+                        type: "Point",
+                        coordinates: start,
+                      },
+                    },
+                  ],
+                },
+              },
+              paint: {
+                "circle-radius": 10,
+                "circle-color": "#3887be",
+              },
+            });
+            const coords = response.routes_coords[i][j + 1].split(",");
+
+            const end = {
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  properties: {},
+                  geometry: {
+                    type: "Point",
+                    coordinates: coords,
+                  },
+                },
+              ],
+            };
+            if (map.getLayer("end")) {
+              map.getSource("end").setData(end);
+            } else {
+              map.addLayer({
+                id: "end",
+                type: "circle",
+                source: {
+                  type: "geojson",
+                  data: {
+                    type: "FeatureCollection",
+                    features: [
+                      {
+                        type: "Feature",
+                        properties: {},
+                        geometry: {
+                          type: "Point",
+                          coordinates: coords,
+                        },
+                      },
+                    ],
+                  },
+                },
+                paint: {
+                  "circle-radius": 10,
+                  "circle-color": "#f30",
+                },
+              });
+            }
+            var source = response.routes_coords[i][j].split(",");
+            const dest = response.routes_coords[i][j + 1].split(",");
+            getRoute(source, dest, col);
+          }
+        }
+      }
+      async function start(c, map) {
+        var url = "https://z3j0rj.deta.dev/";
+
+        var number_of_vehicles = 4;
+        var depot = 0;
+
+        var data = `{
+          "coordinates": ${c},
+          "number_of_vehicles": ${number_of_vehicles},
+          "depot": ${depot}
+        }`;
+
+        // console.log(data);
+        var response = null;
+
+        const rawResponse = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: data
+        });
+        const content = await rawResponse.json();
+        response =  content;
+        console.log("response: ", response);
+        // console.log(map);
+        reCenter(response, map);
+        var total_time = 0;
+        var total_distance = 0;
+        let tripInstructions = "";
+
+        for (var i = 0; i < response.total_distances.length; i++) {
+          total_distance += response.total_distances[i];
+        }
+
+        var ci = -1;
+        async function getRoute(start, end, col) {
+          var j = 100;
+          const query = await fetch(
+            `https://api.mapbox.com/directions/v5/mapbox/driving/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`,
+            { method: "GET" }
+          );
+          const json = await query.json();
+          const data = json.routes[0];
+          const route = data.geometry.coordinates;
+          
+          // console.log(start, end, ci, colors[ci]);
+          map.addLayer({
+            id: (Math.random() + 1).toString(36).substring(7),
+            type: "line",
+            source: {
+              type: "geojson",
+              data: {
+                type: "Feature",
+                properties: {},
+                geometry: {
+                  type: "LineString",
+                  coordinates: route,
+                },
+              },
+            },
+            layout: {
+              "line-join": "round",
+              "line-cap": "round",
+            },
+            paint: {
+              "line-color": col,
+              "line-width": 5,
+              "line-opacity": 0.75,
+            },
+          });
+          // console.log( end == response.routes_coords[0][0])
+
+          map.addLayer(
+            {
+              id: (Math.random() + 1).toString(36).substring(7),
+              type: "symbol",
+              source: {
+                type: "geojson",
+                data: {
+                  type: "Feature",
+                  properties: {},
+                  geometry: {
+                    type: "LineString",
+                    coordinates: route,
+                  },
+                },
+              },
+              layout: {
+                "symbol-placement": "line",
+                "text-field": "▶",
+                "text-size": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  12,
+                  24,
+                  22,
+                  60,
+                ],
+                "symbol-spacing": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  12,
+                  30,
+                  22,
+                  160,
+                ],
+                "text-keep-upright": false,
+              },
+              paint: {
+                "text-color": "#3887be",
+                "text-halo-color": "hsl(55, 11%, 96%)",
+                "text-halo-width": 3,
+              },
+            },
+            "waterway-label"
+          );
+          // get the sidebar and add the instructions
+
+          if (json) {
+            document.querySelector('#cross').addEventListener('click', () => {
+              document.querySelector('#instructions').classList.add('display');
+            }); 
+            const instructions = document.getElementById("instructions");
+            const steps = data.legs[0].steps;
+            total_time += Math.floor(data.duration / 60);
+            for (const step of steps) {
+              tripInstructions += `<li><h4>${step.maneuver.instruction}</h4></li>`;
+            }
+            instructions.innerHTML = `<h2>Trip duration: ${total_time} min 🚴 </h2> <h2>Trip distance: ${Math.floor(
+              total_distance / 1000
+            )} km 🚴 </h2> `;
+            // <h3> Driving Instructions : </h3>${tripInstructions}</ol>`;
+          }
+        } 
+        init_locations(map, response, getRoute);
+      }
+      var test_coords = `[
+        "-89.790945,35.053347",
+        "-90.019375,35.094509",
+        "-90.052027,35.14259",
+        "-89.919783,35.103347",
+        "-90.010188,35.138495",
+        "-90.04027,35.13988",
+        "-89.940793,35.122824",
+        "-90.031549,35.116131",
+        "-89.917591,35.106069",
+        "-89.96206,35.116435",
+        "-89.988856,35.15564",
+        "-90.045273,35.155601",
+        "-90.053361,35.148298",
+        "-89.865175,35.09867",
+        "-89.966336,35.155342",
+        "-89.960472,35.159009"
+      ]`
+      function pickCoords() {
+        const map = new mapboxgl.Map({
+          container: "map",
+          style: "mapbox://styles/mapbox/navigation-night-v1",
+          // center: test_coords[0].split(","), // starting position
+          center: [-89.790945, 35.053347],
+          zoom: 12,
+        });
+        const arr_marker = [];
+        var click = true;
+        map.on("click",(e) => {
+          if (click) {
+            const coord = e.lngLat;
+            arr_marker.push(`"${coord.lng},${coord.lat}"`)
+            // console.log(arr_marker)
+            if(arr_marker.length == 10) {
+              start(`[${arr_marker}]`, map);
+              click = false;
+            }
+            const marker = new mapboxgl.Marker().setLngLat(coord).addTo(map);
+          }
+        })
+        // start(test_coords, map);
+      }
+      pickCoords();
+    </script>
+  </body>
+</html>

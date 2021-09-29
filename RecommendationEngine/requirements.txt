@@ -1,0 +1,7 @@
+Flask==2.0.1
+pandas==1.1.5
+matplotlib==3.3.4
+numpy==1.19.5
+sklearn==0.0
+gunicorn
+Flask-Cors
